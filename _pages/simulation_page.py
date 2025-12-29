@@ -9,6 +9,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
+from datetime import datetime, timedelta
 
 import sys
 import os
@@ -32,13 +33,14 @@ def render_enhanced_simulation():
     """, unsafe_allow_html=True)
     
     # Create tabs for parameter groups
-    tab_general, tab_ua, tab_ads, tab_retention, tab_subscription, tab_variation = st.tabs([
+    tab_general, tab_ua, tab_ads, tab_retention, tab_subscription, tab_variation, tab_spend = st.tabs([
         "⚙️ Chung", 
         "📢 User Acquisition", 
         "📺 Monetization (Ads)", 
         "📉 Retention",
         "💳 Subscription",
-        "📊 Biến động (Variation)"
+        "📊 Biến động (Variation)",
+        "💰 Spend Plan"
     ])
     
     # =========================================================================
@@ -648,6 +650,171 @@ def render_enhanced_simulation():
     }
     
     # =========================================================================
+    # TAB: SPEND PLANNING
+    # =========================================================================
+    with tab_spend:
+        st.markdown("### 💰 Kế hoạch Chi tiêu UA")
+        st.caption("*Lập kế hoạch chi tiêu UA theo ngày trong tương lai và xem dự báo doanh thu/lợi nhuận*")
+        
+        st.markdown("""
+        <div class="vn-note">
+        💡 <strong>Hướng dẫn:</strong> Chọn khoảng thời gian chi tiêu và nhập budget hàng ngày. 
+        Sau khi chạy simulation, bạn sẽ thấy dự báo doanh thu và lợi nhuận theo từng ngày.
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Enable spend planning
+        enable_spend_plan = st.checkbox("✅ Kích hoạt Spend Planning", value=True, key="enable_spend_plan",
+                                         help="Bật để cấu hình kế hoạch chi tiêu và xem biểu đồ revenue/profit")
+        
+        if enable_spend_plan:
+            # Date range selection
+            st.markdown("#### 📅 Khoảng thời gian")
+            date_col1, date_col2 = st.columns(2)
+            
+            with date_col1:
+                spend_start_date = st.date_input(
+                    "Ngày bắt đầu",
+                    value=datetime.today(),
+                    key="spend_start_date",
+                    help="Ngày bắt đầu chiến dịch UA"
+                )
+            
+            with date_col2:
+                spend_end_date = st.date_input(
+                    "Ngày kết thúc",
+                    value=datetime.today() + timedelta(days=30),
+                    key="spend_end_date",
+                    help="Ngày kết thúc chiến dịch UA"
+                )
+            
+            # Validate dates
+            spend_total_days = (spend_end_date - spend_start_date).days + 1
+            if spend_total_days <= 0:
+                st.error("⚠️ Ngày kết thúc phải sau ngày bắt đầu!")
+                spend_total_days = 1
+            
+            st.markdown("---")
+            
+            # Daily spend configuration
+            st.markdown("#### 💵 Chi tiêu hàng ngày")
+            
+            spend_mode = st.radio(
+                "Chế độ chi tiêu",
+                ["Fixed Daily", "Weekday/Weekend Pattern", "Custom Pattern"],
+                horizontal=True,
+                key="spend_mode",
+                help="Fixed: cố định mỗi ngày. Pattern: khác nhau theo ngày trong tuần."
+            )
+            
+            if spend_mode == "Fixed Daily":
+                daily_spend = st.number_input(
+                    "Spend mỗi ngày ($)",
+                    min_value=0.0, max_value=100000.0, value=100.0, step=10.0,
+                    key="daily_spend_fixed",
+                    help="Chi tiêu UA cố định mỗi ngày"
+                )
+                spend_schedule = {d: daily_spend for d in range(spend_total_days)}
+                
+            elif spend_mode == "Weekday/Weekend Pattern":
+                spend_col1, spend_col2 = st.columns(2)
+                with spend_col1:
+                    weekday_spend = st.number_input(
+                        "Spend ngày thường ($)",
+                        min_value=0.0, max_value=100000.0, value=100.0, step=10.0,
+                        key="weekday_spend"
+                    )
+                with spend_col2:
+                    weekend_spend = st.number_input(
+                        "Spend cuối tuần ($)",
+                        min_value=0.0, max_value=100000.0, value=150.0, step=10.0,
+                        key="weekend_spend"
+                    )
+                
+                # Create schedule based on weekday/weekend
+                spend_schedule = {}
+                for d in range(spend_total_days):
+                    date = spend_start_date + timedelta(days=d)
+                    if date.weekday() >= 5:  # Saturday=5, Sunday=6
+                        spend_schedule[d] = weekend_spend
+                    else:
+                        spend_schedule[d] = weekday_spend
+                daily_spend = weekday_spend  # For average calculation
+                
+            else:  # Custom Pattern
+                st.info("💡 Custom Pattern: Nhập spend cho từng tuần")
+                custom_weeks = min(8, (spend_total_days + 6) // 7)  # Max 8 weeks
+                weekly_spends = []
+                
+                week_cols = st.columns(min(4, custom_weeks))
+                for w in range(custom_weeks):
+                    with week_cols[w % 4]:
+                        weekly_spend = st.number_input(
+                            f"Tuần {w+1} ($)",
+                            min_value=0.0, max_value=100000.0, value=100.0 * (1 + w * 0.1), step=10.0,
+                            key=f"week_{w}_spend"
+                        )
+                        weekly_spends.append(weekly_spend)
+                
+                # Create schedule based on weekly pattern
+                spend_schedule = {}
+                for d in range(spend_total_days):
+                    week_idx = min(d // 7, len(weekly_spends) - 1)
+                    spend_schedule[d] = weekly_spends[week_idx]
+                daily_spend = np.mean(list(spend_schedule.values()))
+            
+            # Calculate totals
+            total_spend = sum(spend_schedule.values())
+            avg_daily_spend = total_spend / spend_total_days if spend_total_days > 0 else 0
+            
+            st.markdown("---")
+            
+            # Summary metrics
+            st.markdown("#### 📊 Tổng kết Kế hoạch")
+            summary_col1, summary_col2, summary_col3 = st.columns(3)
+            
+            with summary_col1:
+                st.metric("📆 Số ngày", f"{spend_total_days} ngày")
+            with summary_col2:
+                st.metric("💵 Spend TB/ngày", f"${avg_daily_spend:,.0f}")
+            with summary_col3:
+                st.metric("💰 Tổng Spend", f"${total_spend:,.0f}")
+            
+            # Spend curve preview
+            st.markdown("#### 📈 Preview Spend Curve")
+            spend_dates = [spend_start_date + timedelta(days=d) for d in range(spend_total_days)]
+            spend_values = [spend_schedule[d] for d in range(spend_total_days)]
+            
+            fig_spend = go.Figure()
+            fig_spend.add_trace(go.Bar(
+                x=spend_dates, y=spend_values,
+                name='Daily Spend',
+                marker_color='rgba(239, 68, 68, 0.7)'
+            ))
+            fig_spend.update_layout(
+                title=f"Kế hoạch Chi tiêu ({spend_total_days} ngày) - Tổng: ${total_spend:,.0f}",
+                xaxis_title="Ngày", yaxis_title="Spend ($)",
+                height=250, margin=dict(t=35, b=30, l=50, r=20),
+                template="plotly_white", showlegend=False
+            )
+            st.plotly_chart(fig_spend, use_container_width=True)
+            
+            # Store spend plan in session state
+            st.session_state.spend_plan = {
+                'enabled': True,
+                'start_date': spend_start_date,
+                'end_date': spend_end_date,
+                'total_days': spend_total_days,
+                'schedule': spend_schedule,
+                'total_spend': total_spend,
+                'avg_daily_spend': avg_daily_spend
+            }
+        else:
+            st.session_state.spend_plan = {'enabled': False}
+    
+    # =========================================================================
     # RUN SIMULATION
     # =========================================================================
     st.markdown("---")
@@ -1082,6 +1249,251 @@ def render_enhanced_simulation():
         
         *Nghĩa là 90% các kịch bản sẽ có ROAS nằm trong khoảng này.*
         """)
+        
+        # =====================================================================
+        # REVENUE & PROFIT PROJECTION (Based on Spend Planning)
+        # =====================================================================
+        spend_plan = st.session_state.get('spend_plan', {'enabled': False})
+        
+        if spend_plan.get('enabled', False) and cpi_mean > 0:
+            st.markdown("---")
+            st.markdown("### 💹 Dự báo Doanh thu & Lợi nhuận theo Kế hoạch Chi tiêu")
+            st.caption("*Dựa trên LTV simulation và kế hoạch spend đã cấu hình*")
+            
+            # Get spend plan data
+            spend_schedule = spend_plan['schedule']
+            spend_total_days = spend_plan['total_days']
+            spend_start_date = spend_plan['start_date']
+            total_spend = spend_plan['total_spend']
+            
+            # Use average daily breakdown from simulations to get LTV curve
+            # Build LTV curve using mean LTV and simulation days
+            sim_days_cfg = st.session_state.get('simulation_config', None)
+            max_day = sim_days_cfg.simulation_days if sim_days_cfg else 365
+            
+            # Check if we have daily_breakdown data, otherwise build synthetic curve
+            has_breakdown = raw_results and 'daily_breakdown' in raw_results[0] and len(raw_results[0].get('daily_breakdown', [])) > 0
+            
+            if has_breakdown:
+                # Get average LTV contribution by day from all simulations
+                sample_breakdown = raw_results[0]['daily_breakdown']
+                max_day = len(sample_breakdown)
+                
+                # Build average cumulative LTV curve
+                ltv_curve = []
+                for day in range(max_day):
+                    day_ltvs = []
+                    for result in raw_results[:min(100, len(raw_results))]:  # Sample 100 for speed
+                        if day < len(result.get('daily_breakdown', [])):
+                            day_ltvs.append(result['daily_breakdown'][day].get('cumulative_total', 0))
+                    ltv_curve.append(np.mean(day_ltvs) if day_ltvs else 0)
+            else:
+                # Fallback: Build synthetic LTV curve based on retention and mean LTV
+                # LTV accumulates following retention curve shape
+                st.info("💡 Sử dụng LTV curve ước tính từ giá trị trung bình.")
+                ltv_curve = []
+                config = st.session_state.get('simulation_config', None)
+                if config:
+                    # Simple exponential decay based LTV accumulation
+                    for day in range(max_day):
+                        # LTV accumulates roughly following: final_ltv * (1 - exp(-day/half_life))
+                        progress = 1 - np.exp(-day / 30)  # ~30 day half-life
+                        ltv_curve.append(ltv_mean * progress)
+                else:
+                    for day in range(max_day):
+                        progress = 1 - np.exp(-day / 30)
+                        ltv_curve.append(ltv_mean * progress)
+            
+            if len(ltv_curve) > 0:
+                
+                # Calculate daily revenue from cohorts
+                # For each spend day, calculate how much revenue that cohort generates on each future day
+                projection_days = min(spend_total_days + 90, 365)  # Project spend period + 90 days
+                
+                daily_revenue_iaa = [0.0] * projection_days
+                daily_revenue_iap = [0.0] * projection_days
+                daily_spend_proj = [0.0] * projection_days
+                cumulative_spend = [0.0] * projection_days
+                cumulative_revenue = [0.0] * projection_days
+                
+                # For each day we spend
+                for spend_day_idx, daily_spend_val in spend_schedule.items():
+                    if spend_day_idx >= projection_days:
+                        continue
+                        
+                    # Calculate installs from this spend
+                    installs = daily_spend_val / cpi_mean if cpi_mean > 0 else 0
+                    
+                    # Record spend
+                    daily_spend_proj[spend_day_idx] = daily_spend_val
+                    
+                    # For this cohort, add revenue contribution to each future day
+                    for days_since_install in range(min(len(ltv_curve), projection_days - spend_day_idx)):
+                        revenue_day_idx = spend_day_idx + days_since_install
+                        if revenue_day_idx >= projection_days:
+                            break
+                        
+                        # Incremental LTV for this day
+                        if days_since_install == 0:
+                            increment = ltv_curve[0] if len(ltv_curve) > 0 else 0
+                        else:
+                            increment = ltv_curve[days_since_install] - ltv_curve[days_since_install - 1] if days_since_install < len(ltv_curve) else 0
+                        
+                        daily_rev = installs * increment
+                        
+                        # Split between IAA and IAP based on LTV breakdown
+                        iaa_ratio = ltv_iaa_mean / ltv_mean if ltv_mean > 0 else 0.5
+                        daily_revenue_iaa[revenue_day_idx] += daily_rev * iaa_ratio
+                        daily_revenue_iap[revenue_day_idx] += daily_rev * (1 - iaa_ratio)
+                
+                # Calculate cumulative values
+                for i in range(projection_days):
+                    cumulative_spend[i] = sum(daily_spend_proj[:i+1])
+                    cumulative_revenue[i] = sum(daily_revenue_iaa[:i+1]) + sum(daily_revenue_iap[:i+1])
+                
+                # Calculate daily and cumulative profit
+                daily_profit = [daily_revenue_iaa[i] + daily_revenue_iap[i] - daily_spend_proj[i] for i in range(projection_days)]
+                cumulative_profit = [cumulative_revenue[i] - cumulative_spend[i] for i in range(projection_days)]
+                
+                # Find break-even day
+                breakeven_day = None
+                for i, profit in enumerate(cumulative_profit):
+                    if profit >= 0 and cumulative_spend[i] > 0:
+                        breakeven_day = i
+                        break
+                
+                # Create projection dates
+                projection_dates = [spend_start_date + timedelta(days=d) for d in range(projection_days)]
+                
+                # Summary Metrics
+                total_revenue_projected = cumulative_revenue[-1] if cumulative_revenue else 0
+                total_profit_projected = cumulative_profit[-1] if cumulative_profit else 0
+                final_roas = (total_revenue_projected / total_spend * 100) if total_spend > 0 else 0
+                
+                metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+                
+                with metric_col1:
+                    st.metric("💰 Tổng Chi tiêu", f"${total_spend:,.0f}")
+                with metric_col2:
+                    st.metric("📈 Doanh thu Dự kiến", f"${total_revenue_projected:,.0f}")
+                with metric_col3:
+                    profit_color = "🟢" if total_profit_projected > 0 else "🔴"
+                    st.metric(f"{profit_color} Lợi nhuận", f"${total_profit_projected:,.0f}")
+                with metric_col4:
+                    if breakeven_day is not None:
+                        st.metric("📍 Break-even", f"Ngày {breakeven_day + 1}")
+                    else:
+                        st.metric("📍 Break-even", "Chưa đạt", help="Chưa đạt điểm hòa vốn trong kỳ")
+                
+                # Chart 1: Daily Revenue (Stacked Bar)
+                st.markdown("#### 📊 Doanh thu theo Ngày")
+                
+                fig_daily_rev = go.Figure()
+                fig_daily_rev.add_trace(go.Bar(
+                    x=projection_dates, y=daily_revenue_iaa,
+                    name='IAA (Ads)', marker_color='rgba(102, 126, 234, 0.8)'
+                ))
+                fig_daily_rev.add_trace(go.Bar(
+                    x=projection_dates, y=daily_revenue_iap,
+                    name='IAP (Subscription)', marker_color='rgba(118, 75, 162, 0.8)'
+                ))
+                fig_daily_rev.add_trace(go.Scatter(
+                    x=projection_dates, y=daily_spend_proj,
+                    name='Daily Spend', mode='lines',
+                    line=dict(color='rgba(239, 68, 68, 0.8)', width=2, dash='dot')
+                ))
+                
+                fig_daily_rev.update_layout(
+                    barmode='stack',
+                    title=f"Doanh thu & Chi tiêu theo Ngày ({projection_days} ngày)",
+                    xaxis_title="Ngày", yaxis_title="$ USD",
+                    height=300, margin=dict(t=35, b=30, l=50, r=20),
+                    template="plotly_white",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig_daily_rev, use_container_width=True)
+                
+                # Chart 2: Cumulative Profit/Loss
+                st.markdown("#### 📈 Lợi nhuận Tích lũy")
+                
+                fig_profit = go.Figure()
+                
+                # Color based on profit/loss
+                colors = ['rgba(34, 197, 94, 0.7)' if p >= 0 else 'rgba(239, 68, 68, 0.7)' for p in cumulative_profit]
+                
+                fig_profit.add_trace(go.Scatter(
+                    x=projection_dates, y=cumulative_profit,
+                    mode='lines', name='Cumulative Profit',
+                    line=dict(color='#22c55e', width=3),
+                    fill='tozeroy', 
+                    fillcolor='rgba(34, 197, 94, 0.15)'
+                ))
+                
+                # Add cumulative revenue and spend lines
+                fig_profit.add_trace(go.Scatter(
+                    x=projection_dates, y=cumulative_revenue,
+                    mode='lines', name='Cumulative Revenue',
+                    line=dict(color='#667eea', width=2, dash='dash')
+                ))
+                fig_profit.add_trace(go.Scatter(
+                    x=projection_dates, y=cumulative_spend,
+                    mode='lines', name='Cumulative Spend',
+                    line=dict(color='#ef4444', width=2, dash='dot')
+                ))
+                
+                # Break-even line
+                fig_profit.add_hline(y=0, line_dash="solid", line_color="gray", line_width=1)
+                
+                # Mark break-even point with a vertical line using shapes
+                if breakeven_day is not None and breakeven_day < len(projection_dates):
+                    breakeven_date = projection_dates[breakeven_day]
+                    breakeven_profit = cumulative_profit[breakeven_day]
+                    
+                    # Add break-even marker as a point
+                    fig_profit.add_trace(go.Scatter(
+                        x=[breakeven_date], y=[breakeven_profit],
+                        mode='markers+text',
+                        name='Break-even',
+                        marker=dict(size=12, color='green', symbol='star'),
+                        text=[f'Break-even D{breakeven_day+1}'],
+                        textposition='top center',
+                        showlegend=False
+                    ))
+                
+                fig_profit.update_layout(
+                    title=f"Lợi nhuận Tích lũy - ROAS dự kiến: {final_roas:.1f}%",
+                    xaxis_title="Ngày", yaxis_title="$ USD",
+                    height=350, margin=dict(t=35, b=30, l=50, r=20),
+                    template="plotly_white",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig_profit, use_container_width=True)
+                
+                # ROI Summary Table
+                st.markdown("#### 📋 Tổng kết ROI theo Mốc thời gian")
+                
+                milestones_roi = [7, 14, 30, 60, 90] if projection_days >= 90 else [7, 14, 30]
+                roi_data = []
+                
+                for milestone in milestones_roi:
+                    if milestone < projection_days:
+                        spend_at = cumulative_spend[milestone]
+                        rev_at = cumulative_revenue[milestone]
+                        profit_at = cumulative_profit[milestone]
+                        roas_at = (rev_at / spend_at * 100) if spend_at > 0 else 0
+                        
+                        roi_data.append({
+                            "Mốc": f"D{milestone}",
+                            "Spend ($)": f"${spend_at:,.0f}",
+                            "Revenue ($)": f"${rev_at:,.0f}",
+                            "Profit ($)": f"${profit_at:,.0f}",
+                            "ROAS (%)": f"{roas_at:.1f}%"
+                        })
+                
+                if roi_data:
+                    st.dataframe(pd.DataFrame(roi_data), use_container_width=True, hide_index=True)
+        elif not spend_plan.get('enabled', False):
+            st.info("💡 Bật **Spend Planning** ở tab '💰 Spend Plan' để xem dự báo doanh thu và lợi nhuận theo ngày.")
 
 
 if __name__ == "__main__":
