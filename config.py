@@ -22,10 +22,10 @@ class UAMetrics:
     # CPM, CTR, CVR → tính ra CPI
     cpm: float = 5.0            # Cost per Mille ($)
     ctr: float = 0.02           # Click-Through Rate (2%)
-    cvr: float = 0.25           # Conversion Rate (25%)
+    cvr: float = 0.45           # Conversion Rate (45%)
     
     # Organic ratio
-    organic_ratio: float = 0.30  # 30% users là organic (không mất chi phí UA)
+    organic_ratio: float = 0.05  # 5% users là organic (không mất chi phí UA)
     
     @property
     def cpi_paid(self) -> float:

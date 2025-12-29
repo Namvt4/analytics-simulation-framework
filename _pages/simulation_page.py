@@ -548,7 +548,7 @@ def render_enhanced_simulation():
         with col1:
             cpm_variation = st.slider(
                 "CPM Variation (%)",
-                min_value=0.0, max_value=50.0, value=0.5, step=0.5,
+                min_value=0.0, max_value=50.0, value=1.0, step=0.5,
                 help="Độ biến động của CPM giữa các kịch bản",
                 key="var_cpm"
             ) / 100
@@ -556,7 +556,7 @@ def render_enhanced_simulation():
         with col2:
             ctr_variation = st.slider(
                 "CTR Variation (%)",
-                min_value=0.0, max_value=50.0, value=0.5, step=0.5,
+                min_value=0.0, max_value=50.0, value=1.0, step=0.5,
                 help="Độ biến động của Click-Through Rate",
                 key="var_ctr"
             ) / 100
@@ -564,7 +564,7 @@ def render_enhanced_simulation():
         with col3:
             cvr_variation = st.slider(
                 "CVR Variation (%)",
-                min_value=0.0, max_value=60.0, value=0.5, step=0.5,
+                min_value=0.0, max_value=60.0, value=1.0, step=0.5,
                 help="Độ biến động của Conversion Rate",
                 key="var_cvr"
             ) / 100
@@ -578,7 +578,7 @@ def render_enhanced_simulation():
         with col1:
             ecpm_variation = st.slider(
                 "eCPM Variation (%)",
-                min_value=0.0, max_value=50.0, value=0.5, step=0.5,
+                min_value=0.0, max_value=50.0, value=1.0, step=0.5,
                 help="Độ biến động của eCPM",
                 key="var_ecpm"
             ) / 100
@@ -586,7 +586,7 @@ def render_enhanced_simulation():
         with col2:
             impressions_variation = st.slider(
                 "Impressions Variation (%)",
-                min_value=0.0, max_value=40.0, value=0.5, step=0.5,
+                min_value=0.0, max_value=40.0, value=1.0, step=0.5,
                 help="Độ biến động của số lượt xem quảng cáo",
                 key="var_impressions"
             ) / 100
@@ -600,7 +600,7 @@ def render_enhanced_simulation():
         with col1:
             retention_variation = st.slider(
                 "Retention Variation (%)",
-                min_value=0.0, max_value=40.0, value=0.5, step=0.5,
+                min_value=0.0, max_value=40.0, value=1.0, step=0.5,
                 help="Độ biến động của tỷ lệ retention",
                 key="var_retention"
             ) / 100
@@ -608,7 +608,7 @@ def render_enhanced_simulation():
         with col2:
             pay_rate_variation = st.slider(
                 "Pay Rate Variation (%)",
-                min_value=0.0, max_value=60.0, value=0.5, step=0.5,
+                min_value=0.0, max_value=60.0, value=1.0, step=0.5,
                 help="Độ biến động của tỷ lệ subscribe",
                 key="var_pay_rate"
             ) / 100
@@ -616,7 +616,7 @@ def render_enhanced_simulation():
         with col3:
             sub_ret_variation = st.slider(
                 "Sub Retention Variation (%)",
-                min_value=0.0, max_value=40.0, value=0.5, step=0.5,
+                min_value=0.0, max_value=40.0, value=1.0, step=0.5,
                 help="Độ biến động của tỷ lệ giữ chân subscription",
                 key="var_sub_ret"
             ) / 100
