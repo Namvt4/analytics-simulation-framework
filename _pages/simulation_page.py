@@ -703,10 +703,10 @@ def render_enhanced_simulation():
             
             spend_mode = st.radio(
                 "Chế độ chi tiêu",
-                ["Fixed Daily", "Weekday/Weekend Pattern", "Custom Pattern"],
+                ["Fixed Daily", "Weekday/Weekend Pattern", "Monthly Pattern", "Weekly Pattern"],
                 horizontal=True,
                 key="spend_mode",
-                help="Fixed: cố định mỗi ngày. Pattern: khác nhau theo ngày trong tuần."
+                help="Fixed: cố định mỗi ngày. Pattern: khác nhau theo tuần/tháng."
             )
             
             if spend_mode == "Fixed Daily":
@@ -743,8 +743,30 @@ def render_enhanced_simulation():
                         spend_schedule[d] = weekday_spend
                 daily_spend = weekday_spend  # For average calculation
                 
-            else:  # Custom Pattern
-                st.info("💡 Custom Pattern: Nhập spend cho từng tuần")
+            elif spend_mode == "Monthly Pattern":
+                st.info("💡 Monthly Pattern: Nhập spend trung bình mỗi ngày cho từng tháng")
+                custom_months = min(12, (spend_total_days + 29) // 30)  # Max 12 months
+                monthly_spends = []
+                
+                month_cols = st.columns(min(4, custom_months))
+                for m in range(custom_months):
+                    with month_cols[m % 4]:
+                        monthly_spend = st.number_input(
+                            f"Tháng {m+1} ($)",
+                            min_value=0.0, max_value=100000.0, value=100.0 * (1 + m * 0.1), step=10.0,
+                            key=f"month_{m}_spend"
+                        )
+                        monthly_spends.append(monthly_spend)
+                
+                # Create schedule based on monthly pattern
+                spend_schedule = {}
+                for d in range(spend_total_days):
+                    month_idx = min(d // 30, len(monthly_spends) - 1)
+                    spend_schedule[d] = monthly_spends[month_idx]
+                daily_spend = np.mean(list(spend_schedule.values()))
+                
+            else:  # Weekly Pattern
+                st.info("💡 Weekly Pattern: Nhập spend cho từng tuần")
                 custom_weeks = min(8, (spend_total_days + 6) // 7)  # Max 8 weeks
                 weekly_spends = []
                 
