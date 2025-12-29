@@ -94,29 +94,33 @@ def main():
     # Sidebar
     with st.sidebar:
         st.markdown("## 📊 Analytics Business Framework")
-        st.markdown("*Khung phân tích nghiệp vụ*")
-        st.markdown("---")
-        
-        # Navigation
-        page = st.radio(
-            "Điều hướng",
-            ["🏠 Tổng quan", 
-             "1️⃣ Mô phỏng",
-             "2️⃣ Dự báo", 
-             "3️⃣ Giám sát",
-             "4️⃣ Phân tích",
-             "5️⃣ Hành động"],
-            label_visibility="collapsed"
-        )
-        
-        st.markdown("---")
-        
-        # Data source info
-        st.markdown("### 📡 Nguồn dữ liệu")
-        st.info("Đang dùng dữ liệu mẫu.\nKết nối BigQuery để có dữ liệu thực.")
+        # TEMPORARILY HIDDEN - Navigation menu
+        # st.markdown("*Khung phân tích nghiệp vụ*")
+        # st.markdown("---")
+        # 
+        # # Navigation
+        # page = st.radio(
+        #     "Điều hướng",
+        #     ["🏠 Tổng quan", 
+        #      "1️⃣ Mô phỏng",
+        #      "2️⃣ Dự báo", 
+        #      "3️⃣ Giám sát",
+        #      "4️⃣ Phân tích",
+        #      "5️⃣ Hành động"],
+        #     label_visibility="collapsed"
+        # )
+        # 
+        # st.markdown("---")
+        # 
+        # # Data source info
+        # st.markdown("### 📡 Nguồn dữ liệu")
+        # st.info("Đang dùng dữ liệu mẫu.\nKết nối BigQuery để có dữ liệu thực.")
         
         # Last update
         st.markdown(f"**Cập nhật:** {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    
+    # Set default page to Simulation when navigation is hidden
+    page = "1️⃣ Mô phỏng"
     
     # Main content based on selected page
     if page == "🏠 Tổng quan":
