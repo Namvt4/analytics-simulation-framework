@@ -22,7 +22,7 @@ from modules.prediction import PLTVPredictor, ChurnPredictor
 from modules.monitoring import AlertManager, HealthScoreCalculator, PacingTracker
 from modules.analysis import DrilldownAnalyzer, FunnelAnalyzer, CohortAnalyzer
 from modules.action import AutomatedRules, ActionRecommender, PersonalizedOffer
-from pages.simulation_page import render_enhanced_simulation
+from _pages.simulation_page import render_enhanced_simulation
 from components.charts import (
     create_roas_distribution_chart,
     create_retention_curve_chart,
