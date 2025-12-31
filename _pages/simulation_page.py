@@ -33,14 +33,15 @@ def render_enhanced_simulation():
     """, unsafe_allow_html=True)
     
     # Create tabs for parameter groups
-    tab_general, tab_ua, tab_ads, tab_retention, tab_subscription, tab_variation, tab_spend = st.tabs([
+    tab_general, tab_ua, tab_ads, tab_retention, tab_subscription, tab_variation, tab_spend, tab_campaign = st.tabs([
         "⚙️ Chung", 
         "📢 User Acquisition", 
         "📺 Monetization (Ads)", 
         "📉 Retention",
         "💳 Subscription",
         "📊 Biến động (Variation)",
-        "💰 Spend Plan"
+        "💰 Spend Plan",
+        "🎯 Campaign Tracker"
     ])
     
     # =========================================================================
@@ -835,6 +836,267 @@ def render_enhanced_simulation():
             }
         else:
             st.session_state.spend_plan = {'enabled': False}
+    
+    # =========================================================================
+    # TAB: CAMPAIGN TRACKER
+    # =========================================================================  
+    with tab_campaign:
+        st.markdown("### 🎯 Campaign Tracker & Predictor")
+        st.caption("*Đánh giá và dự đoán hiệu quả campaign từ dữ liệu sớm (D1-D7)*")
+        
+        # Initialize campaigns list in session state
+        if 'tracked_campaigns' not in st.session_state:
+            st.session_state.tracked_campaigns = []
+        
+        st.markdown("---")
+        
+        # Campaign Input Form
+        st.markdown("#### ➕ Thêm Campaign mới")
+        
+        input_col1, input_col2 = st.columns(2)
+        
+        with input_col1:
+            camp_name = st.text_input("Tên Campaign", value="", key="camp_name_input",
+                                       placeholder="VD: Facebook_US_Dec")
+            camp_cpi = st.number_input("CPI thực tế ($)", min_value=0.01, max_value=50.0, 
+                                       value=0.50, step=0.05, key="camp_cpi_input")
+            camp_installs = st.number_input("Số Installs", min_value=100, max_value=1000000,
+                                            value=1000, step=100, key="camp_installs_input")
+        
+        with input_col2:
+            camp_d1_ret = st.number_input("D1 Retention (%)", min_value=1.0, max_value=100.0,
+                                          value=40.0, step=1.0, key="camp_d1_ret_input")
+            camp_d7_ret = st.number_input("D7 Retention (%)", min_value=1.0, max_value=100.0,
+                                          value=20.0, step=1.0, key="camp_d7_ret_input")
+            camp_d7_arpu = st.number_input("D7 ARPU ($)", min_value=0.0, max_value=50.0,
+                                           value=0.10, step=0.01, key="camp_d7_arpu_input")
+        
+        # Add Campaign Button
+        if st.button("➕ Thêm Campaign", type="secondary"):
+            if camp_name and camp_name.strip():
+                # Power Law Retention Prediction
+                d1_ret = camp_d1_ret / 100
+                d7_ret = camp_d7_ret / 100
+                
+                # Fit power law: Ret(d) = d1_ret * d^(-b), find b from D7
+                if d7_ret > 0 and d1_ret > 0:
+                    b = np.log(d1_ret / d7_ret) / np.log(7)
+                else:
+                    b = 0.3  # Default decay
+                
+                # Predict retention for D14, D30, D60, D90, D365
+                def predict_ret(day):
+                    if day <= 0:
+                        return 1.0
+                    return min(d1_ret * (day ** (-b)), 1.0)
+                
+                pred_d14 = predict_ret(14)
+                pred_d30 = predict_ret(30)
+                pred_d60 = predict_ret(60)
+                pred_d90 = predict_ret(90)
+                pred_d365 = predict_ret(365)
+                
+                # Calculate ARPDAU from D7 ARPU and D7 Ret
+                # D7 ARPU = sum of daily revenue from D0 to D6
+                # Approximate ARPDAU = D7 ARPU / 7 (simplified)
+                arpdau = camp_d7_arpu / 7 if camp_d7_arpu > 0 else 0.01
+                
+                # Predict LTV: sum of (retention * arpdau) for each day
+                def calc_ltv(days):
+                    total = 0
+                    for d in range(days + 1):
+                        ret_d = predict_ret(d) if d > 0 else 1.0
+                        total += ret_d * arpdau
+                    return total
+                
+                ltv_d7 = camp_d7_arpu  # Actual D7 ARPU is used as LTV D7
+                ltv_d30 = calc_ltv(30)
+                ltv_d60 = calc_ltv(60)
+                ltv_d90 = calc_ltv(90)
+                ltv_d365 = calc_ltv(365)
+                
+                # Calculate ROAS
+                roas_d7 = (ltv_d7 / camp_cpi * 100) if camp_cpi > 0 else 0
+                roas_d30 = (ltv_d30 / camp_cpi * 100) if camp_cpi > 0 else 0
+                roas_d60 = (ltv_d60 / camp_cpi * 100) if camp_cpi > 0 else 0
+                roas_d90 = (ltv_d90 / camp_cpi * 100) if camp_cpi > 0 else 0
+                roas_d365 = (ltv_d365 / camp_cpi * 100) if camp_cpi > 0 else 0
+                
+                # Determine recommendation
+                # Green: ROAS D30 > 80% or (ROAS D7 > 25% and high retention)
+                # Yellow: ROAS D30 50-80% or (ROAS D7 15-25% and good retention)
+                # Red: ROAS D30 < 50% and low retention
+                if roas_d30 >= 80 or (roas_d7 >= 25 and d7_ret >= 0.25):
+                    recommendation = "🟢 SCALE"
+                    rec_color = "#22c55e"
+                elif roas_d30 >= 50 or (roas_d7 >= 15 and d7_ret >= 0.18):
+                    recommendation = "🟡 HOLD"
+                    rec_color = "#eab308"
+                else:
+                    recommendation = "🔴 KILL"
+                    rec_color = "#ef4444"
+                
+                # Store campaign
+                campaign_data = {
+                    'name': camp_name.strip(),
+                    'cpi': camp_cpi,
+                    'installs': camp_installs,
+                    'd1_ret': d1_ret,
+                    'd7_ret': d7_ret,
+                    'd7_arpu': camp_d7_arpu,
+                    'pred_d14_ret': pred_d14,
+                    'pred_d30_ret': pred_d30,
+                    'pred_d60_ret': pred_d60,
+                    'pred_d90_ret': pred_d90,
+                    'pred_d365_ret': pred_d365,
+                    'ltv_d7': ltv_d7,
+                    'ltv_d30': ltv_d30,
+                    'ltv_d60': ltv_d60,
+                    'ltv_d90': ltv_d90,
+                    'ltv_d365': ltv_d365,
+                    'roas_d7': roas_d7,
+                    'roas_d30': roas_d30,
+                    'roas_d60': roas_d60,
+                    'roas_d90': roas_d90,
+                    'roas_d365': roas_d365,
+                    'recommendation': recommendation,
+                    'rec_color': rec_color,
+                    'decay_b': b
+                }
+                st.session_state.tracked_campaigns.append(campaign_data)
+                st.success(f"✅ Đã thêm campaign: {camp_name}")
+                st.rerun()
+            else:
+                st.warning("⚠️ Vui lòng nhập tên campaign")
+        
+        # Clear all button
+        if st.session_state.tracked_campaigns:
+            if st.button("🗑️ Xóa tất cả Campaigns", type="secondary"):
+                st.session_state.tracked_campaigns = []
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # Display tracked campaigns
+        if st.session_state.tracked_campaigns:
+            st.markdown("#### 📊 Danh sách Campaign")
+            
+            # Summary Table
+            summary_data = []
+            for camp in st.session_state.tracked_campaigns:
+                summary_data.append({
+                    "Campaign": camp['name'],
+                    "CPI": f"${camp['cpi']:.2f}",
+                    "Installs": f"{camp['installs']:,}",
+                    "D1 Ret": f"{camp['d1_ret']*100:.1f}%",
+                    "D7 Ret": f"{camp['d7_ret']*100:.1f}%",
+                    "D7 ROAS": f"{camp['roas_d7']:.1f}%",
+                    "D30 ROAS*": f"{camp['roas_d30']:.1f}%",
+                    "LTV D365*": f"${camp['ltv_d365']:.2f}",
+                    "Rec": camp['recommendation']
+                })
+            
+            summary_df = pd.DataFrame(summary_data)
+            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+            st.caption("*Giá trị dự đoán dựa trên mô hình Power Law từ D1/D7 Retention")
+            
+            # Charts
+            st.markdown("---")
+            st.markdown("#### 📈 So sánh Campaign")
+            
+            chart_col1, chart_col2 = st.columns(2)
+            
+            with chart_col1:
+                # ROAS Comparison Bar Chart
+                fig_roas = go.Figure()
+                camp_names = [c['name'] for c in st.session_state.tracked_campaigns]
+                roas_d7_vals = [c['roas_d7'] for c in st.session_state.tracked_campaigns]
+                roas_d30_vals = [c['roas_d30'] for c in st.session_state.tracked_campaigns]
+                
+                fig_roas.add_trace(go.Bar(name='D7 ROAS', x=camp_names, y=roas_d7_vals, 
+                                          marker_color='rgba(102, 126, 234, 0.7)'))
+                fig_roas.add_trace(go.Bar(name='D30 ROAS (pred)', x=camp_names, y=roas_d30_vals,
+                                          marker_color='rgba(34, 197, 94, 0.7)'))
+                fig_roas.add_hline(y=100, line_dash="dash", line_color="red", 
+                                   annotation_text="Break-even")
+                fig_roas.update_layout(title="ROAS Comparison", barmode='group',
+                                       yaxis_title="ROAS (%)", height=350,
+                                       template="plotly_white")
+                st.plotly_chart(fig_roas, use_container_width=True)
+            
+            with chart_col2:
+                # Retention Curve Comparison
+                fig_ret = go.Figure()
+                days = [1, 7, 14, 30, 60, 90, 365]
+                colors = ['#667eea', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+                
+                for i, camp in enumerate(st.session_state.tracked_campaigns):
+                    ret_values = [
+                        camp['d1_ret'] * 100,
+                        camp['d7_ret'] * 100,
+                        camp['pred_d14_ret'] * 100,
+                        camp['pred_d30_ret'] * 100,
+                        camp['pred_d60_ret'] * 100,
+                        camp['pred_d90_ret'] * 100,
+                        camp['pred_d365_ret'] * 100
+                    ]
+                    fig_ret.add_trace(go.Scatter(
+                        x=days, y=ret_values, mode='lines+markers',
+                        name=camp['name'], line=dict(color=colors[i % len(colors)])
+                    ))
+                
+                fig_ret.update_layout(title="Retention Curve Comparison",
+                                      xaxis_title="Day", yaxis_title="Retention (%)",
+                                      height=350, template="plotly_white")
+                st.plotly_chart(fig_ret, use_container_width=True)
+            
+            # Detailed Analysis for each campaign
+            st.markdown("---")
+            st.markdown("#### 🔍 Chi tiết Campaign")
+            
+            for camp in st.session_state.tracked_campaigns:
+                with st.expander(f"📊 {camp['name']} - {camp['recommendation']}"):
+                    detail_col1, detail_col2, detail_col3 = st.columns(3)
+                    
+                    with detail_col1:
+                        st.markdown("**📊 Input Data**")
+                        st.write(f"• CPI: ${camp['cpi']:.2f}")
+                        st.write(f"• Installs: {camp['installs']:,}")
+                        st.write(f"• D1 Ret: {camp['d1_ret']*100:.1f}%")
+                        st.write(f"• D7 Ret: {camp['d7_ret']*100:.1f}%")
+                        st.write(f"• D7 ARPU: ${camp['d7_arpu']:.2f}")
+                    
+                    with detail_col2:
+                        st.markdown("**📈 Predicted Retention**")
+                        st.write(f"• D14: {camp['pred_d14_ret']*100:.1f}%")
+                        st.write(f"• D30: {camp['pred_d30_ret']*100:.1f}%")
+                        st.write(f"• D60: {camp['pred_d60_ret']*100:.1f}%")
+                        st.write(f"• D90: {camp['pred_d90_ret']*100:.1f}%")
+                        st.write(f"• D365: {camp['pred_d365_ret']*100:.2f}%")
+                    
+                    with detail_col3:
+                        st.markdown("**💰 Predicted LTV & ROAS**")
+                        st.write(f"• LTV D30: ${camp['ltv_d30']:.2f}")
+                        st.write(f"• LTV D90: ${camp['ltv_d90']:.2f}")
+                        st.write(f"• LTV D365: ${camp['ltv_d365']:.2f}")
+                        st.write(f"• ROAS D30: {camp['roas_d30']:.1f}%")
+                        st.write(f"• ROAS D365: {camp['roas_d365']:.1f}%")
+                    
+                    # Spend & Revenue Projection
+                    total_spend = camp['cpi'] * camp['installs']
+                    rev_d30 = camp['ltv_d30'] * camp['installs']
+                    rev_d365 = camp['ltv_d365'] * camp['installs']
+                    profit_d365 = rev_d365 - total_spend
+                    
+                    st.markdown(f"""
+                    **💵 Tổng kết đầu tư:**  
+                    • Total Spend: **${total_spend:,.0f}**  
+                    • Revenue D30 (pred): **${rev_d30:,.0f}**  
+                    • Revenue D365 (pred): **${rev_d365:,.0f}**  
+                    • Profit D365 (pred): **${profit_d365:,.0f}** {'✅' if profit_d365 > 0 else '❌'}
+                    """)
+        else:
+            st.info("💡 Chưa có campaign nào. Thêm campaign để bắt đầu phân tích.")
     
     # =========================================================================
     # RUN SIMULATION
